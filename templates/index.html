@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Portfolio Optimiser</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <div class="header">
+        <h1>📈 Stock Portfolio Optimiser</h1>
+        <p>Find the optimal allocation of stocks using Markowitz Portfolio Theory</p>
+    </div>
+
+    <div class="main">
+        <!-- LEFT PANEL -->
+        <div class="left-panel">
+            <h2>Portfolio Setup</h2>
+
+            <div class="section">
+                <h3>Stock Symbols</h3>
+                <p class="hint">Enter comma separated stock symbols e.g. AAPL, MSFT, TSLA, AMZN</p>
+                <textarea id="tickers" rows="3" placeholder="AAPL, MSFT, TSLA, AMZN, GOOGL"></textarea>
+            </div>
+
+            <div class="section">
+                <h3>Investment Amount (Optional)</h3>
+                <input type="number" id="investment" placeholder="e.g. 10000" min="0">
+                <small>Used to show rand/dollar allocation per stock</small>
+            </div>
+
+            <button class="btn-solve" onclick="optimise()">🔍 Optimise Portfolio</button>
+            <div id="error_msg" class="error"></div>
+        </div>
+
+        <!-- RIGHT PANEL -->
+        <div class="right-panel">
+            <div id="results">
+                <p class="placeholder">Enter your stocks and click Optimise to see results.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function optimise() {
+            const tickers = document.getElementById('tickers').value;
+            const investment = document.getElementById('investment').value;
+
+            if (!tickers) {
+                document.getElementById('error_msg').innerText = 'Please enter at least 2 stock symbols.';
+                return;
+            }
+
+            document.getElementById('error_msg').innerText = '';
+            document.querySelector('.btn-solve').innerText = '⏳ Optimising...';
+            document.getElementById('results').innerHTML = '<p class="placeholder">Fetching stock data and optimising...</p>';
+
+            const res = await fetch('/optimise', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tickers, investment })
+            });
+
+            const data = await res.json();
+            document.querySelector('.btn-solve').innerText = '🔍 Optimise Portfolio';
+
+            if (data.error) {
+                document.getElementById('error_msg').innerText = data.error;
+                document.getElementById('results').innerHTML = '';
+                return;
+            }
+
+            displayResults(data, investment);
+        }
+
+        function displayResults(data, investment) {
+            let html = `
+                <h2>Optimal Portfolio</h2>
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <span class="stat-label">Expected Annual Return</span>
+                        <span class="stat-value green">${data.expected_return}%</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Portfolio Risk (Volatility)</span>
+                        <span class="stat-value orange">${data.risk}%</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Sharpe Ratio</span>
+                        <span class="stat-value blue">${data.sharpe_ratio}</span>
+                    </div>
+                </div>
+
+                <h3>Allocation</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Stock</th>
+                            <th>Allocation %</th>
+                            ${investment ? '<th>Amount</th>' : ''}
+                            <th>Current Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            data.tickers.forEach((ticker, i) => {
+                const amount = investment ? `$${(investment * data.weights[i] / 100).toFixed(2)}` : '';
+                const price = data.prices[ticker] ? `$${parseFloat(data.prices[ticker]).toFixed(2)}` : 'N/A';
+                html += `
+                    <tr>
+                        <td><b>${ticker}</b></td>
+                        <td>
+                            <div class="bar-container">
+                                <div class="bar" style="width: ${data.weights[i]}%"></div>
+                                <span>${data.weights[i]}%</span>
+                            </div>
+                        </td>
+                        ${investment ? `<td>${amount}</td>` : ''}
+                        <td>${price}</td>
+                    </tr>
+                `;
+            });
+
+            html += `</tbody></table>`;
+            document.getElementById('results').innerHTML = html;
+        }
+    </script>
+</body>
+</html>
